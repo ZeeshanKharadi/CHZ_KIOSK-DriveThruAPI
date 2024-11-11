@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="11.1.0" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="7.0.10" />
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.4.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KIOS.Integration.Application\KIOS.Integration.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="POS_IntegrationCommonDTO">
+      <HintPath>..\..\..\..\..\..\..\Dlls\POS_IntegrationCommonDTO.dll</HintPath>
+    </Reference>
+    <Reference Include="POS_IntegrationCommonInfrastructure">
+      <HintPath>..\..\..\..\..\..\..\Dlls\POS_IntegrationCommonInfrastructure.dll</HintPath>
+    </Reference>
+    <Reference Include="POS_Integration_CommonCore">
+      <HintPath>..\..\..\..\..\..\..\Dlls\POS_Integration_CommonCore.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
