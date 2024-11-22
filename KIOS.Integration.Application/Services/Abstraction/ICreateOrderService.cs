@@ -5,7 +5,7 @@ namespace KIOS.Integration.Application.Services.Abstraction
 {
     public interface ICreateOrderService
     {
-        Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderKFC(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
-        Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderKFCA(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
+        Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
+        Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZA(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
     }
 }

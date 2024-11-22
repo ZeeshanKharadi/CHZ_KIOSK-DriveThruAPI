@@ -9,22 +9,20 @@ namespace KIOS.Integration.Web.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class DriveThruOrderController : ControllerBase
+    public class OrderManagementController : ControllerBase
     {
-        private readonly ILogger<DriveThruOrderController> _logger;
+        private readonly ILogger<OrderManagementController> _logger;
         private readonly ICreateOrderService _createOrderService;
 
-        public DriveThruOrderController(ILogger<DriveThruOrderController> logger, ICreateOrderService createOrderService)
+        public OrderManagementController(ILogger<OrderManagementController> logger, ICreateOrderService createOrderService)
         {
             _logger = logger;
             _createOrderService = createOrderService;
         }
 
-        
-
         [HttpPost]
-        [Route("create-driveThru-order")]
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateDriveThruKFC(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        [Route("create-order")]
+        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
             ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
 
@@ -35,7 +33,7 @@ namespace KIOS.Integration.Web.Controllers
                 request.TenderTypeId = null;
                 request.TableNum = null;
 
-                return await _createOrderService.CreateOrderKFC(request);
+                return await _createOrderService.CreateOrderCHZ(request);
             }
             catch (Exception ex)
             {

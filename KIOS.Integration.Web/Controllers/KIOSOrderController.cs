@@ -22,13 +22,13 @@ namespace KIOS.Integration.Web.Controllers
 
         [HttpPost]
         [Route("create-order-pos")]
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderKFC(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
             ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
 
             try
             {
-                return await _createOrderService.CreateOrderKFC(request);
+                return await _createOrderService.CreateOrderCHZ(request);
             }
             catch (Exception ex)
             {
@@ -42,7 +42,7 @@ namespace KIOS.Integration.Web.Controllers
 
         [HttpPost]
         [Route("create-driveThru-order")]
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateDriveThruKFC(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateDriveThruCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
             ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
 
@@ -53,7 +53,7 @@ namespace KIOS.Integration.Web.Controllers
                 request.TenderTypeId = null;
                 request.TableNum = null;
 
-                return await _createOrderService.CreateOrderKFC(request);
+                return await _createOrderService.CreateOrderCHZ(request);
             }
             catch (Exception ex)
             {

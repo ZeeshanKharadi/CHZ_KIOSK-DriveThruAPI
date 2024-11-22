@@ -12,7 +12,7 @@ namespace KIOS.Integration.Application.Services
 {
     public class CheckPosStatusService : ICheckPosStatusService
     {
-        private string _connectionString_KFC;
+        private string _connectionString_CHZ_MIDDLEWARE;
         private readonly IConfiguration _configuration;
         private string _terminalId;
 
@@ -20,7 +20,7 @@ namespace KIOS.Integration.Application.Services
         public CheckPosStatusService(IConfiguration configuration, ISender mediator)
         {
             _configuration = configuration;
-            _connectionString_KFC = configuration.GetConnectionString("RSSUConnection");
+            _connectionString_CHZ_MIDDLEWARE = configuration.GetConnectionString("RSSUConnection");
             _terminalId = _configuration.GetSection("Keys:TerminalId").Value;
         }
 
@@ -38,7 +38,7 @@ namespace KIOS.Integration.Application.Services
             {
                 string query = "select Top 1 SHIFTID from crt.RETAILSHIFTSTAGINGVIEW Where CURRENTTERMINALID ='" + _terminalId + "' AND STOREID = '" + storeId + "'  AND STATUS = 1";
 
-                DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_KFC, query, CommandType.Text);
+                DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text);
 
                 try
                 {

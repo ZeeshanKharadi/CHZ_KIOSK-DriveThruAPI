@@ -11,12 +11,12 @@ namespace KIOS.Integration.Application.Handlers.CommandHandler
     public class CreateRetailTransactionHandler : IRequestHandler<CreateRetailTransactionCommand, RetailTransaction>
     {
         private readonly AppDbContext _appDbContext;
-        private string _connectionString_KFC;
+        private string _connectionString_CHZ_MIDDLEWARE;
 
         public CreateRetailTransactionHandler (IConfiguration configuration, AppDbContext appDbContext) 
         {
             _appDbContext = appDbContext;
-            _connectionString_KFC = configuration.GetConnectionString("RSSUConnection");
+            _connectionString_CHZ_MIDDLEWARE = configuration.GetConnectionString("RSSUConnection");
         }
 
         public async Task<RetailTransaction> Handle(CreateRetailTransactionCommand request, CancellationToken cancellationToken)
@@ -30,7 +30,7 @@ namespace KIOS.Integration.Application.Handlers.CommandHandler
             {
                 Json = JsonHelper.Serialize(request),
                 TransactionId = request.Store + "-" + StringHelper.GenerateRandomCode(),
-                DataAreaId = "kfc",
+                DataAreaId = "CHZ_MIDDLEWARE",
                 Currency = "PKR",
                 GrossAmount = request.GrossAmount,
                 NetAmount = request.NetAmount,
@@ -78,12 +78,12 @@ namespace KIOS.Integration.Application.Handlers.CommandHandler
         private string ItemName(string itemId)
         {
             string itemName = string.Empty;
-            string dataAreaId = "kfc";
+            string dataAreaId = "CHZ_MIDDLEWARE";
 
             string qry = "select ax.ECORESPRODUCTTRANSLATION.DESCRIPTION from ax.INVENTTABLE " +
                         "Join ax.ECORESPRODUCTTRANSLATION On ax.ECORESPRODUCTTRANSLATION.PRODUCT = ax.INVENTTABLE.PRODUCT Where ITEMID ='" + itemId + "' And DATAAREAID = '" + dataAreaId + "' And LANGUAGEID='en-us'";
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_KFC, qry, CommandType.Text);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, qry, CommandType.Text);
 
             if (dataSet.Tables != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
             {

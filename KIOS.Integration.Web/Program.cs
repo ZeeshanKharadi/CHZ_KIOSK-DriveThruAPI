@@ -35,8 +35,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddSwaggerGen(opt => opt.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
 {
-    Title = "KFC KIOSK Integration API V3",
-    Description = "KIOSK POS Integration version 3.0"
+    Title = "Cheezious App Integration API V3",
+    Description = "Cheezious App Integration version 3.0"
 }));
 
 builder.Services.AddControllers();
