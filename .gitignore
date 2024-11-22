@@ -35,3 +35,6 @@ ScaffoldingReadMe.txt
 *.v2
 *.bin
 /.vs/CHZ_Integration/v17/DocumentLayout.json
+/.vs/CHZ_DriveThruAPI/v17/DocumentLayout.json
+/.vs/CHZ_DriveThruAPI/v17/.wsuo
+/.vs/CHZ_Integration/v17/DocumentLayout.backup.json
