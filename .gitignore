@@ -32,3 +32,6 @@ ScaffoldingReadMe.txt
 /.vs/KIOS_Integration/v17/.futdcache.v2
 /.vs/ProjectEvaluation/kios_integration.metadata.v7.bin
 /.vs/ProjectEvaluation/kios_integration.projects.v7.bin
+*.v2
+*.bin
+/.vs/CHZ_Integration/v17/DocumentLayout.json
