@@ -61,6 +61,12 @@ namespace KIOS.Integration.Application.Commands
         public string BusinessDateCustom { get; set; }
         public string TableNum { get; set; }
         public string Comment { get; set; }
+        public double DiscAmount { get; set; }
+        public double DiscAmountWithoutTax { get; set; }
+        public string Floor { get; set; }
+        public string Table { get; set; }
+        public string Server { get; set; }
+        public string Person { get; set; }
 
         public IList<SalesLine> salesLines { get; set; }
 

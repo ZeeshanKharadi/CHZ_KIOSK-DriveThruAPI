@@ -4,6 +4,7 @@ using System.Net;
 using POS_IntegrationCommonDTO.Response;
 using POS_Integration_CommonCore.Response;
 using POS_Integration_CommonCore.Enums;
+using KIOS.Integration.Application.Commands;
 
 namespace KIOS.Integration.Web.Controllers
 {
@@ -22,9 +23,9 @@ namespace KIOS.Integration.Web.Controllers
 
         [HttpPost]
         [Route("create-order-pos")]
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
-            ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
+            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
 
             try
             {
@@ -42,9 +43,9 @@ namespace KIOS.Integration.Web.Controllers
 
         [HttpPost]
         [Route("create-driveThru-order")]
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateDriveThruCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateDriveThruCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
-            ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
+            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
 
             try
             {

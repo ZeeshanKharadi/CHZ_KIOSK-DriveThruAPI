@@ -59,13 +59,13 @@ namespace KIOS.Integration.Application.Services
             _mediator = mediator;
         }
 
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
-            ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
+            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
             //LastRecordResponseFromRetailTransTableResponse lastRecordResponse = new LastRecordResponseFromRetailTransTableResponse();
             response.HttpStatusCode = (int)HttpStatusCode.Accepted;
             response.MessageType = (int)MessageType.Info;
-            CreateOrderResponse responseModel = new CreateOrderResponse();
+            CustomCreateOrderResponse responseModel = new CustomCreateOrderResponse();
             Task<FBRResponse> fBRResponse = null;
             InlineQueryResponse inlineQueryResponseTax = new InlineQueryResponse();
             int affectedRows = 0;
@@ -100,18 +100,19 @@ namespace KIOS.Integration.Application.Services
 
             try
             {
+                // Drive Thru || Server App Order
                 if (request.Payment_method == PaymentMethod.Cash)
                 {
 
                     //RetailTransaction retailTransaction = await _mediator.Send(request);
-                    //responseModel.RecipteId = retailTransaction.TransactionId;
+                    //responseModel.ReceiptId = retailTransaction.TransactionId;
 
                     await SaveRetailTransactionAsync(request, responseModel);
 
                     response.Result = responseModel;
                     response.HttpStatusCode = (int)HttpStatusCode.OK;
                     response.MessageType = (int)MessageType.Success;
-                    response.Message = "DriveThru Order created successfully.";
+                    response.Message = "Order created successfully.";
 
                     return response;
 
@@ -125,7 +126,7 @@ namespace KIOS.Integration.Application.Services
                         int transTime = Convert.ToInt32(totalseconds);
 
 
-                        if (request != null && request.Store == null || request.Store == "string" || request.Store == string.Empty)
+                        if (request != null && (request.Store == null || request.Store == "string" || request.Store == string.Empty))
                         {
                             response.Result = responseModel = null;
                             response.HttpStatusCode = (int)HttpStatusCode.BadRequest;
@@ -207,7 +208,7 @@ namespace KIOS.Integration.Application.Services
 
 
                         //string description = " ThirdPartyOrder: " + request.ThirdPartyOrderId + " KIOS " + "; Source: " + request.Source + ";";
-                        string description = "KIOSKOrders";
+                        string description = "ServerAppOrders";
                         InlineQueryResponse inlineQueryResponseTaxGroupandBusinessDate = getTaxGroupandBusinessDate(request.Store, request.Payment_method);
 
 
@@ -421,7 +422,7 @@ namespace KIOS.Integration.Application.Services
                                             response.MessageType = (int)MessageType.Success;
                                             response.Message = "Success";
                                             response.HttpStatusCode = (int)HttpStatusCode.OK;
-                                            responseModel.RecipteId = _receiptId;
+                                            responseModel.ReceiptId = _receiptId;
                                             response.Result = responseModel;
                                         }
                                         catch (Exception ex)
@@ -526,6 +527,51 @@ namespace KIOS.Integration.Application.Services
 
 
             return response;
+        }
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> UpdateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        {
+            // Response Model is same as of Create Order 
+            var response = new ResponseModelWithClass<CustomCreateOrderResponse>
+            {
+                HttpStatusCode = (int)HttpStatusCode.Accepted,
+                MessageType = (int)MessageType.Info
+            };
+
+            var responseModel = new CustomCreateOrderResponse();
+
+            try
+            {
+                // Handle specific payment method
+                if (request.Payment_method == PaymentMethod.Cash)
+                {
+                    bool isUpdate = true;
+                    await SaveRetailTransactionAsync(request, responseModel, isUpdate);
+
+                    response.Result = responseModel;
+                    response.HttpStatusCode = (int)HttpStatusCode.OK;
+                    response.MessageType = (int)MessageType.Success;
+                    response.Message = "Order updated successfully.";
+                    return response;
+                }
+
+                // Handle other payment methods (optional)
+                response.Message = "Unsupported payment method.";
+                response.HttpStatusCode = (int)HttpStatusCode.BadRequest;
+                response.MessageType = (int)MessageType.Warning;
+                return response;
+            }
+            catch (Exception ex)
+            {
+
+                // Insert error log in the database (if necessary)
+               // InsertSimplexRequestLog(request, ex.Message);
+
+                response.Result = null;
+                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+                response.MessageType = (int)MessageType.Error;
+                response.Message = "An error occurred while processing the request.";
+                return response;
+            }
         }
 
         private ResponseModelWithClass<DataTable> CreateretailTransSalesTransLines(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
@@ -2019,7 +2065,7 @@ namespace KIOS.Integration.Application.Services
             return mZNPOSTERMINALINFOResponse;
         }
 
-        public Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZA(CreateRetailTransactionCommand request)
+        public Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZA(CreateRetailTransactionCommand request)
         {
             throw new NotImplementedException();
         }
@@ -2129,24 +2175,31 @@ namespace KIOS.Integration.Application.Services
 
             return affectedRows;
         }
-        private async Task SaveRetailTransactionAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request, CreateOrderResponse responseModel)
+        private async Task SaveRetailTransactionAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request, CustomCreateOrderResponse responseModel, bool isUpdate = false)
         {
             var jsonRequest = JsonConvert.SerializeObject(request);
-            var storedProcedure = "ext.InsertMiddlewareRetailTransaction";  // Assuming this is your stored procedure name
-
+            var storedProcedure = "ext.InsertMiddlewareRetailTransaction";
 
             try
             {
                 using (var connection = new SqlConnection(_connectionString_CHZ_MIDDLEWARE))
                 {
                     await connection.OpenAsync();
-                    var transactionid = GenerateTransactionId();
+                    var transactionid = "";
+                    if (isUpdate)
+                    {
+                        transactionid = request.TransactionId;
+                    }
+                    else
+                    {
+                        transactionid = GenerateTransactionId();
+                    }
                     using (var command = new SqlCommand(storedProcedure, connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         // Add parameters for the stored procedure from the request object
-                        command.Parameters.AddWithValue("@DataAreaId", "kfc");
+                        command.Parameters.AddWithValue("@DataAreaId", "CHZ");
                         command.Parameters.AddWithValue("@Currency", "PKR");
                         command.Parameters.AddWithValue("@GrossAmount", request.GrossAmount);
                         command.Parameters.AddWithValue("@NetAmount", request.NetAmount);
@@ -2157,6 +2210,13 @@ namespace KIOS.Integration.Application.Services
                         command.Parameters.AddWithValue("@TenderTypeId", request.TenderTypeId ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@AmountCur", request.AmountCur);
                         command.Parameters.AddWithValue("@ThirdPartyOrderId", request.ThirdPartyOrderId ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@DiscAmount", (object)request.DiscAmount ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@DiscAmountWithoutTax", (object)request.DiscAmountWithoutTax ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@Floor", request.Floor ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Table", request.Table ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Server", request.Server ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Person", request.Person ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Comment", request.Comment ?? "");
                         command.Parameters.AddWithValue("@Json", jsonRequest ?? (object)DBNull.Value);
 
                         // Add the TransactionId as input parameter
@@ -2165,8 +2225,36 @@ namespace KIOS.Integration.Application.Services
                         // Execute the stored procedure
                         await command.ExecuteNonQueryAsync();
 
-                        // Set the RecipteId (or use it as needed in your response model)
-                        responseModel.RecipteId = transactionid; // Store the output TransactionId in your response model
+                        // Set the ReceiptId (or use it as needed in your response model)
+                        responseModel.ReceiptId = transactionid; // Store the output TransactionId in your response model
+                    }
+                    // Insert sales lines
+                    foreach (var item in request.salesLines)
+                    {
+                        var itemName = ItemName(item.ItemId);
+
+                        var salesTrans = new KIOS.Integration.Application.Commands.CreateRetailTransactionSalesTransCommand
+                        {
+                            TransactionId = transactionid,
+                            ItemId = item.ItemId,
+                            ItemName = itemName,
+                            Linenum = (decimal)item.LineNum,
+                            Quantity = (decimal)item.Qty,
+                            TaxAmount = (decimal)item.TaxAmount,
+                            NetAmount = (decimal)item.NETAMOUNT,
+                            NetAmountInclTax = (decimal)item.NETAMOUNTINCLTAX,
+                            TransdDate = DateTime.Now,
+                            Store = request.Store,
+                            Price = (decimal)item.Price,
+                            LineComment = item.LineComment,
+                            DiscAmount = (decimal)item.DiscAmount,
+                            DiscAmountWithOutTax = (decimal)item.DiscAmountWithOutTax,
+                            PeriodicDiscAmount = (decimal)item.PERIODICDISCAMOUNT,
+                            PeriodicPercentaGeDisc = (decimal)item.PeriodicPercentaGeDisc
+                        };
+
+                        // Call the function to insert the sales line
+                        await InsertRetailTransactionSalesTransAsync(salesTrans, connection);
                     }
                 }
             }
@@ -2175,6 +2263,34 @@ namespace KIOS.Integration.Application.Services
                 // Handle any exceptions, for example, log them
                 Console.WriteLine($"Error: {ex.Message}");
                 throw;
+            }
+        }
+        private async Task InsertRetailTransactionSalesTransAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionSalesTransCommand salesTrans, SqlConnection connection)
+        {
+            using (var command = new SqlCommand("InsertRetailTransactionSalesTrans", connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+
+                // Add parameters
+                command.Parameters.AddWithValue("@TransactionId", salesTrans.TransactionId);
+                command.Parameters.AddWithValue("@ItemId", salesTrans.ItemId ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@ItemName", salesTrans.ItemName ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@LineNum", salesTrans.Linenum);
+                command.Parameters.AddWithValue("@Quantity", salesTrans.Quantity);
+                command.Parameters.AddWithValue("@TaxAmount", salesTrans.TaxAmount);
+                command.Parameters.AddWithValue("@NetAmount", salesTrans.NetAmount);
+                command.Parameters.AddWithValue("@NetAmountInclTax", salesTrans.NetAmountInclTax);
+                command.Parameters.AddWithValue("@TransdDate", salesTrans.TransdDate);
+                command.Parameters.AddWithValue("@Store", salesTrans.Store ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@Price", salesTrans.Price);
+                command.Parameters.AddWithValue("@NetPrice", salesTrans.NetPrice);
+                command.Parameters.AddWithValue("@LineComment", salesTrans.LineComment);
+                command.Parameters.AddWithValue("@DiscAmount", salesTrans.DiscAmount);
+                command.Parameters.AddWithValue("@DiscAmountWithOutTax", salesTrans.DiscAmountWithOutTax);
+                command.Parameters.AddWithValue("@PeriodicDiscAmount", salesTrans.PeriodicDiscAmount);
+                command.Parameters.AddWithValue("@PeriodicPercentaGeDisc", salesTrans.PeriodicPercentaGeDisc);
+
+                await command.ExecuteNonQueryAsync();
             }
         }
         public string GenerateTransactionId()
@@ -2190,6 +2306,28 @@ namespace KIOS.Integration.Application.Services
             string transactionId = dateTimePart + randomPart;
 
             return transactionId;
+        }
+        private string ItemName(string itemId)
+        {
+            string itemName = string.Empty;
+            string dataAreaId = "CHZ";
+
+            string qry = "select ax.ECORESPRODUCTTRANSLATION.DESCRIPTION from ax.INVENTTABLE " +
+                        "Join ax.ECORESPRODUCTTRANSLATION On ax.ECORESPRODUCTTRANSLATION.PRODUCT = ax.INVENTTABLE.PRODUCT Where ITEMID ='" + itemId + "' And DATAAREAID = '" + dataAreaId + "' And LANGUAGEID='en-us'";
+
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, qry, CommandType.Text);
+
+            if (dataSet.Tables != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
+            {
+                DataTable dataTable = dataSet.Tables[0];
+                if (dataTable.Rows.Count > 0)
+                {
+                    //Hard Code
+                    itemName = dataTable.Rows[0]["Description"].ToString();
+                }
+            }
+
+            return itemName;
         }
     }
 }
