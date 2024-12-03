@@ -24,6 +24,7 @@ namespace KIOS.Integration.Application.Services
     {
         private string _connectionString_CHZ_MIDDLEWARE;
         private string _connectionString_KDS;
+        private string _connectionString_RSSU;
         private InlineQueryResponse lastRecordResponse;
         private readonly IConfiguration _configuration;
         private string _terminalId;
@@ -51,7 +52,8 @@ namespace KIOS.Integration.Application.Services
         public CreateOrderService(IConfiguration configuration, ISender mediator)
         {
             _configuration = configuration;
-            _connectionString_CHZ_MIDDLEWARE = configuration.GetConnectionString("RSSUConnection");
+            _connectionString_CHZ_MIDDLEWARE = configuration.GetConnectionString("AppDbConnection");
+            _connectionString_RSSU = configuration.GetConnectionString("RSSUConnection");
             _connectionString_KDS = configuration.GetConnectionString("MCKDSConnection");
             _terminalId = _configuration.GetSection("Keys:TerminalId").Value;
             _terminalId = _configuration.GetSection("Keys:TerminalId").Value;
@@ -59,13 +61,13 @@ namespace KIOS.Integration.Application.Services
             _mediator = mediator;
         }
 
-        public async Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
-            ResponseModelWithClass<CreateOrderResponse> response = new ResponseModelWithClass<CreateOrderResponse>();
+            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
             //LastRecordResponseFromRetailTransTableResponse lastRecordResponse = new LastRecordResponseFromRetailTransTableResponse();
             response.HttpStatusCode = (int)HttpStatusCode.Accepted;
             response.MessageType = (int)MessageType.Info;
-            CreateOrderResponse responseModel = new CreateOrderResponse();
+            CustomCreateOrderResponse responseModel = new CustomCreateOrderResponse();
             Task<FBRResponse> fBRResponse = null;
             InlineQueryResponse inlineQueryResponseTax = new InlineQueryResponse();
             int affectedRows = 0;
@@ -100,32 +102,47 @@ namespace KIOS.Integration.Application.Services
 
             try
             {
+                // Drive Thru || Server App Order
                 if (request.Payment_method == PaymentMethod.Cash)
                 {
+                    string thirdPartorderid = request.ThirdPartyOrderId;
+                    string orderStatus = request.orderStatus;
+                    if (!CreatedRecord(thirdPartorderid, orderStatus))
+                    {
+                        //RetailTransaction retailTransaction = await _mediator.Send(request);
+                        //responseModel.ReceiptId = retailTransaction.TransactionId;
 
-                    //RetailTransaction retailTransaction = await _mediator.Send(request);
-                    //responseModel.RecipteId = retailTransaction.TransactionId;
+                        await SaveRetailTransactionAsync(request, responseModel);
 
-                    await SaveRetailTransactionAsync(request, responseModel);
+                        response.Result = responseModel;
+                        response.HttpStatusCode = (int)HttpStatusCode.OK;
+                        response.MessageType = (int)MessageType.Success;
+                        response.Message = "Order created successfully.";
 
-                    response.Result = responseModel;
-                    response.HttpStatusCode = (int)HttpStatusCode.OK;
-                    response.MessageType = (int)MessageType.Success;
-                    response.Message = "DriveThru Order created successfully.";
-
-                    return response;
+                        return response;
+                    }
+                    else
+                    {
+                        response.Result = null;
+                        response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+                        response.MessageType = (int)MessageType.Error;
+                        response.Message = "Order Already Created";
+                    }
 
                 }
 
                 else if (request.Payment_method == PaymentMethod.CreditCard)
                 {
+                    request.AmountCur = request.GrossAmount;
+                    request.BusinessDate = request.TransDate;
+                    request.BusinessDateCustom = request.TransDate.ToString();
                     if (request != null && request.salesLines.Count > 0)
                     {
                         double totalseconds = TimeSpan.Parse(now.ToString("HH:mm:ss")).TotalSeconds;
                         int transTime = Convert.ToInt32(totalseconds);
 
 
-                        if (request != null && request.Store == null || request.Store == "string" || request.Store == string.Empty)
+                        if (request != null && (request.Store == null || request.Store == "string" || request.Store == string.Empty))
                         {
                             response.Result = responseModel = null;
                             response.HttpStatusCode = (int)HttpStatusCode.BadRequest;
@@ -207,7 +224,7 @@ namespace KIOS.Integration.Application.Services
 
 
                         //string description = " ThirdPartyOrder: " + request.ThirdPartyOrderId + " KIOS " + "; Source: " + request.Source + ";";
-                        string description = "KIOSKOrders";
+                        string description = "ServerAppOrders";
                         InlineQueryResponse inlineQueryResponseTaxGroupandBusinessDate = getTaxGroupandBusinessDate(request.Store, request.Payment_method);
 
 
@@ -248,7 +265,7 @@ namespace KIOS.Integration.Application.Services
                     { "DATAAREAID", request.Company },
                     { "DESCRIPTION", description },
                     { "BATCHTERMINALID", _terminalId },
-                    { "BusinessDate", request.BusinessDateCustom },
+                    { "BusinessDate", request.TransDate},
                     //{ "BusinessDate", request.BusinessDate },
                     { "CREATEDONPOSTERMINAL", _terminalId },
                     { "TIMEWHENTOTALPRESSED", "" + seconds },
@@ -282,7 +299,7 @@ namespace KIOS.Integration.Application.Services
                         //string parsedQuery = TemplateHelper.ParseQueryTemplate(query.ToString(), parameters);
                         try
                         {
-                            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, query.ToString(), CommandType.StoredProcedure, parameters);
+                            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, query.ToString(), CommandType.StoredProcedure, parameters);
 
                             if (affectedRows > 0)
                             {
@@ -414,14 +431,15 @@ namespace KIOS.Integration.Application.Services
                                                 responseModel.FBRInvoiceNo = "No FBR/SBR implemented";
                                             }
 
-                                            InsertSimplexRequestLog(request, "RecordCreated! " + " | " + request.ThirdPartyOrderId);
+                                            //InsertSimplexRequestLog(request, "RecordCreated! " + " | " + request.ThirdPartyOrderId);
+                                            MarkOrderPaid(request.ThirdPartyOrderId);
 
                                             int insertIntoKDS = InsertKDSOrders(request);
 
                                             response.MessageType = (int)MessageType.Success;
                                             response.Message = "Success";
                                             response.HttpStatusCode = (int)HttpStatusCode.OK;
-                                            responseModel.RecipteId = _receiptId;
+                                            responseModel.ReceiptId = _receiptId;
                                             response.Result = responseModel;
                                         }
                                         catch (Exception ex)
@@ -527,7 +545,83 @@ namespace KIOS.Integration.Application.Services
 
             return response;
         }
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> UpdateOrderCHZ(KIOS.Integration.Application.Commands.UpdateOrderRequest request)
+        {
+            // Response Model is same as of Create Order 
+            var response = new ResponseModelWithClass<CustomCreateOrderResponse>
+            {
+                HttpStatusCode = (int)HttpStatusCode.Accepted,
+                MessageType = (int)MessageType.Info
+            };
 
+            var responseModel = new CustomCreateOrderResponse();
+
+            try
+            {
+
+                await UpdateRetailTransaction(request, responseModel);
+
+                response.Result = responseModel;
+                response.HttpStatusCode = (int)HttpStatusCode.OK;
+                response.MessageType = (int)MessageType.Success;
+                response.Message = "Order updated successfully.";
+                return response;
+
+            }
+            catch (Exception ex)
+            {
+
+                // Insert error log in the database (if necessary)
+                // InsertSimplexRequestLog(request, ex.Message);
+
+                response.Result = null;
+                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+                response.MessageType = (int)MessageType.Error;
+                response.Message = "An error occurred while processing the request.";
+                return response;
+            }
+        }
+
+        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> DeleteOrderCHZ(string thirdPartyOrderId)
+        {
+            // Response Model is same as of Create Order 
+            var response = new ResponseModelWithClass<CustomCreateOrderResponse>
+            {
+                HttpStatusCode = (int)HttpStatusCode.Accepted,
+                MessageType = (int)MessageType.Info
+            };
+
+            var responseModel = new CustomCreateOrderResponse();
+
+            try
+            {
+                // Handle specific payment method
+
+                //bool isUpdate = true;
+                //await SaveRetailTransactionAsync(request, responseModel, isUpdate);
+
+                DeleteTransaction(thirdPartyOrderId);
+
+                response.Result = responseModel;
+                response.HttpStatusCode = (int)HttpStatusCode.OK;
+                response.MessageType = (int)MessageType.Success;
+                response.Message = "Order deleted successfully.";
+                return response;
+
+            }
+            catch (Exception ex)
+            {
+
+                // Insert error log in the database (if necessary)
+                // InsertSimplexRequestLog(request, ex.Message);
+
+                response.Result = null;
+                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+                response.MessageType = (int)MessageType.Error;
+                response.Message = "An error occurred while processing the request.";
+                return response;
+            }
+        }
         private ResponseModelWithClass<DataTable> CreateretailTransSalesTransLines(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
         {
             ResponseModelWithClass<DataTable> response = new ResponseModelWithClass<DataTable>();
@@ -558,7 +652,7 @@ namespace KIOS.Integration.Application.Services
                     string qry = "select ax.ECORESPRODUCTTRANSLATION.DESCRIPTION from ax.INVENTTABLE " +
                         "Join ax.ECORESPRODUCTTRANSLATION On ax.ECORESPRODUCTTRANSLATION.PRODUCT = ax.INVENTTABLE.PRODUCT Where ITEMID ='" + item.ItemId + "' And DATAAREAID = '" + request.Company + "' And LANGUAGEID='en-us'";
 
-                    DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, qry, CommandType.Text);
+                    DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, qry, CommandType.Text);
 
                     if (dataSet.Tables != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
                     {
@@ -632,7 +726,7 @@ namespace KIOS.Integration.Application.Services
                         { "TRANSTIME", transTime },
                         { "DATAAREAID", request.Company },
                         { "Currency", request.Currency },
-                        { "BusinessDate", request.BusinessDateCustom },
+                        { "BusinessDate", request.TransDate },
                         { "TaxAmount", Math.Round((decimal)item.TaxAmount, 2) * -1 },
                         { "TAXRATEPERCENT", inlineQueryResponseLineTaxGroupandBusinessDate.TAXVALUE },
                         { "TAXEXEMPTPRICEINCLUSIVEORIGINALPRICE", item.Price },
@@ -647,7 +741,7 @@ namespace KIOS.Integration.Application.Services
                     item.TaxGroup = inlineQueryResponseLineTaxGroupandBusinessDate.TAXGROUP;
                     item.TAXITEMGROUP = taxItemGroup;
 
-                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, lineQuery, CommandType.StoredProcedure, parameters);
+                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, lineQuery, CommandType.StoredProcedure, parameters);
 
                     if (affectedRows > 0)
                     {
@@ -669,7 +763,7 @@ namespace KIOS.Integration.Application.Services
 
             query.Append("select Top 1 SHIFTID from crt.RETAILSHIFTSTAGINGVIEW Where CURRENTTERMINALID ='" + terminal + "' AND STOREID = '" + store + "'  AND STATUS = 1"); ;
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query.ToString(), CommandType.Text);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query.ToString(), CommandType.Text);
 
             if (dataSet != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
             {
@@ -731,7 +825,7 @@ namespace KIOS.Integration.Application.Services
                         { "DATAAREAID", request.Company }
                     };
 
-                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, insertDoNumberQuery, CommandType.Text, parameters);
+                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, insertDoNumberQuery, CommandType.Text, parameters);
                 }
             }
             return affectedRows;
@@ -748,7 +842,7 @@ namespace KIOS.Integration.Application.Services
                 store + "' AND DATAAREAID= '" + company + "' AND SHIFTDATE = '" +
                 date_now + "' AND TransactionID = '" + transactionId + "'";
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, donumberQuery.ToString(), CommandType.Text);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, donumberQuery.ToString(), CommandType.Text);
 
 
             if (dataSet != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
@@ -855,13 +949,13 @@ namespace KIOS.Integration.Application.Services
                              //{ "TRANSTIME", request.TransTime},
                              { "TRANSTIME", transTime},
                              { "DataAreaId", request.Company},
-                             { "BusinessDate", request.BusinessDateCustom},
+                             { "BusinessDate", request.TransDate},
                              { "ISPAYMENTCAPTURED", 1},
                              { "REFUNDABLEAMOUNT", request.GrossAmount },
                              { "LINENUM", 1 }
                           };
 
-                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, paymentTransQuery, CommandType.Text, parameters);
+                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, paymentTransQuery, CommandType.Text, parameters);
 
                     Dictionary<string, object> parametersSecondLine = new Dictionary<string, object>
                          {
@@ -883,13 +977,13 @@ namespace KIOS.Integration.Application.Services
                              //{ "TRANSTIME", request.TransTime},
                              { "TRANSTIME", transTime},
                              { "DataAreaId", request.Company},
-                             { "BusinessDate", request.BusinessDateCustom},
+                             { "BusinessDate", request.TransDate},
                              { "ISPAYMENTCAPTURED", 1},
                              { "REFUNDABLEAMOUNT", 0 },
                              { "LINENUM", 2 }
                           };
 
-                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, paymentTransQuery, CommandType.Text, parametersSecondLine);
+                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, paymentTransQuery, CommandType.Text, parametersSecondLine);
                 }
                 else
                 {
@@ -915,13 +1009,13 @@ namespace KIOS.Integration.Application.Services
                              //{ "TRANSTIME", request.TransTime},
                              { "TRANSTIME", transTime},
                              { "DataAreaId", request.Company},
-                             { "BusinessDate", request.BusinessDateCustom},
+                             { "BusinessDate", request.TransDate},
                              { "ISPAYMENTCAPTURED", 1},
                              { "REFUNDABLEAMOUNT", request.GrossAmount },
                              { "LINENUM", 1 }
                           };
 
-                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, paymentTransQuery, CommandType.Text, parametersSecondLine);
+                    affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, paymentTransQuery, CommandType.Text, parametersSecondLine);
                 }
 
 
@@ -947,7 +1041,7 @@ namespace KIOS.Integration.Application.Services
 
             string query = "Select Top 1 * from ax.RETAILTRANSACTIONTABLE where DATAAREAID = '" + dataAreaId + "'";
 
-            ds = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text);
+            ds = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query, CommandType.Text);
 
             if (ds != null && ds.Tables[0].Rows.Count > 0)
             {
@@ -996,7 +1090,7 @@ namespace KIOS.Integration.Application.Services
             parameters.Add("storeId", storeId);
             parameters.Add("payment_method", paymentType);
 
-            ds = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, queryAppend.ToString(), CommandType.StoredProcedure, parameters);
+            ds = SqlHelper.ExecuteDataSet(_connectionString_RSSU, queryAppend.ToString(), CommandType.StoredProcedure, parameters);
 
             if (ds != null && ds.Tables[0].Rows.Count > 0)
             {
@@ -1065,7 +1159,7 @@ namespace KIOS.Integration.Application.Services
                 query = "SELECT TOP 1 RECEIPTID  FROM ax.RETAILTRANSACTIONTABLE where RETAILTRANSACTIONTABLE.Terminal = '" + _terminalId + "' AND RETAILTRANSACTIONTABLE.Store = '" + storeId + "' AND RECEIPTID != '' ORDER BY CREATEDDATETIME DESC ";
             }
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text, null);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query, CommandType.Text, null);
 
             if (dataSet != null && dataSet.Tables[0].Rows.Count > 0)
             {
@@ -1310,7 +1404,7 @@ namespace KIOS.Integration.Application.Services
 
             string queryVariantId = "Select Top 1 RETAILVARIANTID from ax.INVENTDIMCOMBINATION Where ax.INVENTDIMCOMBINATION.DATAAREAID ='" + company + "' AND ax.INVENTDIMCOMBINATION.ITEMID = '" + itemId + "' Order BY CREATEDDATETIME DESC";
 
-            DataSet dataSetVriantId = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, queryVariantId, CommandType.Text, null);
+            DataSet dataSetVriantId = SqlHelper.ExecuteDataSet(_connectionString_RSSU, queryVariantId, CommandType.Text, null);
 
             if (dataSetVriantId != null && dataSetVriantId.Tables[0].Rows.Count > 0)
             {
@@ -1322,7 +1416,7 @@ namespace KIOS.Integration.Application.Services
             string unitId = "";
             string queryUnitId = "select UNITID from ax.INVENTTABLEMODULE Where DATAAREAID = '" + company + "' AND MODULETYPE = 2 AND ITEMID = '" + itemId + "'";
 
-            DataSet dataSetUnitId = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, queryUnitId, CommandType.Text, null);
+            DataSet dataSetUnitId = SqlHelper.ExecuteDataSet(_connectionString_RSSU, queryUnitId, CommandType.Text, null);
 
             if (dataSetUnitId != null && dataSetUnitId.Tables[0].Rows.Count > 0)
             {
@@ -1344,7 +1438,7 @@ namespace KIOS.Integration.Application.Services
             string taxItemGroup = "";
 
             string queryVariantId = "SELECT TAXITEMGROUPID FROM ax.INVENTTABLEMODULE where DATAAREAID = '" + company + "' And MODULETYPE = 2 AND ITEMID = '" + itemId + "'";
-            DataSet dataSetVriantId = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, queryVariantId, CommandType.Text, null);
+            DataSet dataSetVriantId = SqlHelper.ExecuteDataSet(_connectionString_RSSU, queryVariantId, CommandType.Text, null);
 
             if (dataSetVriantId != null && dataSetVriantId.Tables[0].Rows.Count > 0)
             {
@@ -1362,7 +1456,7 @@ namespace KIOS.Integration.Application.Services
             string query = "SELECT ax.RETAILSTORETABLE.RECID , ax.RETAILCHANNELTABLE.INVENTLOCATION FROM ax.RETAILSTORETABLE JOIN ax.RETAILCHANNELTABLE ON ax.RETAILCHANNELTABLE.RECID = ax.RETAILSTORETABLE.RECID" +
                                     "   where ax.RETAILSTORETABLE.StoreNumber = '" + storeId + "'";
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text, null);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query, CommandType.Text, null);
 
             if (dataSet != null && dataSet.Tables[0].Rows.Count > 0)
             {
@@ -1437,7 +1531,7 @@ namespace KIOS.Integration.Application.Services
                   { "Comment", description }
               };
 
-            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, insertCrtSALESTRANSACTIONQuery, CommandType.Text, parameters);
+            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, insertCrtSALESTRANSACTIONQuery, CommandType.Text, parameters);
 
             //}
 
@@ -1496,19 +1590,19 @@ namespace KIOS.Integration.Application.Services
             int IsdeleteFrom_MCSDoNumberTable = 0;
             int IsdeleteFrom_RETAILTRANSACTIONPAYMENTTRANS = 0;
 
-            IsdeleteFrom_RetailTransactionTable = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, deleteFrom_RetailTransactionTable.ToString(), CommandType.Text, null);
+            IsdeleteFrom_RetailTransactionTable = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, deleteFrom_RetailTransactionTable.ToString(), CommandType.Text, null);
 
             if (IsdeleteFrom_RetailTransactionTable > 0)
             {
-                IsdeleteFrom_RetailTransactionSalesTrans = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, deleteFrom_RetailTransactionSalesTrans, CommandType.Text, null);
+                IsdeleteFrom_RetailTransactionSalesTrans = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, deleteFrom_RetailTransactionSalesTrans, CommandType.Text, null);
 
                 if (IsdeleteFrom_RetailTransactionSalesTrans > 0)
                 {
-                    IsdeleteFrom_MCSDoNumberTable = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, deleteFrom_MCSDoNumberTable, CommandType.Text, null);
+                    IsdeleteFrom_MCSDoNumberTable = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, deleteFrom_MCSDoNumberTable, CommandType.Text, null);
 
                     if (IsdeleteFrom_MCSDoNumberTable > 0)
                     {
-                        IsdeleteFrom_RETAILTRANSACTIONPAYMENTTRANS = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, deleteFrom_RETAILTRANSACTIONPAYMENTTRANS, CommandType.Text, null);
+                        IsdeleteFrom_RETAILTRANSACTIONPAYMENTTRANS = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, deleteFrom_RETAILTRANSACTIONPAYMENTTRANS, CommandType.Text, null);
 
                         if (IsdeleteFrom_RETAILTRANSACTIONPAYMENTTRANS > 0)
                         {
@@ -1566,7 +1660,7 @@ namespace KIOS.Integration.Application.Services
                              { "DATAAREAID", request.Company}
                           };
 
-                        affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, storeProcedureNamr, CommandType.StoredProcedure, parameters);
+                        affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, storeProcedureNamr, CommandType.StoredProcedure, parameters);
 
                     }
 
@@ -1591,7 +1685,7 @@ namespace KIOS.Integration.Application.Services
             string query = "select Top 1 REPLICATIONCOUNTERFROMORIGIN from ax.RETAILTRANSACTIONTAXTRANS where StoreId = '" + storeId + "'" +
             "Order By REPLICATIONCOUNTERFROMORIGIN desc";
 
-            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text, null);
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query, CommandType.Text, null);
 
             if (dataSet != null && dataSet.Tables[0].Rows.Count > 0)
             {
@@ -1630,7 +1724,7 @@ namespace KIOS.Integration.Application.Services
 
               };
 
-            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, insertCrtSALESTRANSACTIONQuery, CommandType.StoredProcedure, parameters);
+            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, insertCrtSALESTRANSACTIONQuery, CommandType.StoredProcedure, parameters);
 
             //}
 
@@ -1999,7 +2093,7 @@ namespace KIOS.Integration.Application.Services
                 {"TERMINAL", terminalId}
             };
 
-            ds = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text, parameters);
+            ds = SqlHelper.ExecuteDataSet(_connectionString_RSSU, query, CommandType.Text, parameters);
 
             if (ds != null && ds.Tables[0].Rows.Count > 0)
             {
@@ -2019,7 +2113,7 @@ namespace KIOS.Integration.Application.Services
             return mZNPOSTERMINALINFOResponse;
         }
 
-        public Task<ResponseModelWithClass<CreateOrderResponse>> CreateOrderCHZA(CreateRetailTransactionCommand request)
+        public Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZA(CreateRetailTransactionCommand request)
         {
             throw new NotImplementedException();
         }
@@ -2040,7 +2134,7 @@ namespace KIOS.Integration.Application.Services
                   { "Value", request.POSFee}
               };
 
-            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, insertRETAILTRANSACTIONMARKUPTRANS, CommandType.StoredProcedure, parameters);
+            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, insertRETAILTRANSACTIONMARKUPTRANS, CommandType.StoredProcedure, parameters);
 
             //}
 
@@ -2067,7 +2161,7 @@ namespace KIOS.Integration.Application.Services
 
               };
 
-            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, InsertSimplexRequestLogQuery, CommandType.StoredProcedure, parameters);
+            affectedRows = SqlHelper.ExecuteNonQuery(_connectionString_RSSU, InsertSimplexRequestLogQuery, CommandType.StoredProcedure, parameters);
 
             //}
 
@@ -2086,7 +2180,7 @@ namespace KIOS.Integration.Application.Services
 
             DataTable dt = null;
 
-            DataSet ds = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, KioskOrderDetail, CommandType.StoredProcedure, KIOSKOrderDetailParameters);
+            DataSet ds = SqlHelper.ExecuteDataSet(_connectionString_RSSU, KioskOrderDetail, CommandType.StoredProcedure, KIOSKOrderDetailParameters);
 
             if (ds.Tables != null && ds.Tables != null && ds.Tables.Count > 0)
             {
@@ -2129,35 +2223,55 @@ namespace KIOS.Integration.Application.Services
 
             return affectedRows;
         }
-        private async Task SaveRetailTransactionAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request, CreateOrderResponse responseModel)
+        private async Task SaveRetailTransactionAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request, CustomCreateOrderResponse responseModel, bool isUpdate = false)
         {
             var jsonRequest = JsonConvert.SerializeObject(request);
-            var storedProcedure = "ext.InsertMiddlewareRetailTransaction";  // Assuming this is your stored procedure name
-
+            var storedProcedure = "InsertMiddlewareRetailTransaction";
+            bool isFinalize = true;
+            if (request.orderStatus == "Created")
+            {
+                isFinalize = false;
+            }
 
             try
             {
                 using (var connection = new SqlConnection(_connectionString_CHZ_MIDDLEWARE))
                 {
                     await connection.OpenAsync();
-                    var transactionid = GenerateTransactionId();
+                    var transactionid = "";
+                    if (isUpdate)
+                    {
+                        transactionid = request.TransactionId;
+                    }
+                    else
+                    {
+                        transactionid = GenerateTransactionId();
+                    }
                     using (var command = new SqlCommand(storedProcedure, connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
                         // Add parameters for the stored procedure from the request object
-                        command.Parameters.AddWithValue("@DataAreaId", "kfc");
+                        command.Parameters.AddWithValue("@DataAreaId", "CHZ");
                         command.Parameters.AddWithValue("@Currency", "PKR");
                         command.Parameters.AddWithValue("@GrossAmount", request.GrossAmount);
                         command.Parameters.AddWithValue("@NetAmount", request.NetAmount);
                         command.Parameters.AddWithValue("@NetPrice", request.NetPrice);
-                        command.Parameters.AddWithValue("@TansDate", request.TransDate);
+                        command.Parameters.AddWithValue("@TransDate", request.TransDate);
                         command.Parameters.AddWithValue("@PaymentMode", request.PaymentMode ?? 1);
                         command.Parameters.AddWithValue("@Store", request.Store ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@TenderTypeId", request.TenderTypeId ?? (object)DBNull.Value);
-                        command.Parameters.AddWithValue("@AmountCur", request.AmountCur);
+                        command.Parameters.AddWithValue("@AmountCur", request.AmountCur ?? request.GrossAmount);
                         command.Parameters.AddWithValue("@ThirdPartyOrderId", request.ThirdPartyOrderId ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@DiscAmount", (object)request.DiscAmount ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@DiscAmountWithoutTax", (object)request.DiscAmountWithoutTax ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@Floor", request.Floor ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Table", request.Table ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Server", request.Server ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Person", request.Person ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@Comment", request.Comment ?? "");
                         command.Parameters.AddWithValue("@Json", jsonRequest ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@isFinalize", isFinalize);
 
                         // Add the TransactionId as input parameter
                         command.Parameters.AddWithValue("@TransactionId", transactionid); // Use the generated TransactionId
@@ -2165,8 +2279,170 @@ namespace KIOS.Integration.Application.Services
                         // Execute the stored procedure
                         await command.ExecuteNonQueryAsync();
 
-                        // Set the RecipteId (or use it as needed in your response model)
-                        responseModel.RecipteId = transactionid; // Store the output TransactionId in your response model
+                        // Set the ReceiptId (or use it as needed in your response model)
+                        responseModel.ReceiptId = transactionid; // Store the output TransactionId in your response model
+                    }
+                    // Insert sales lines
+                    foreach (var item in request.salesLines)
+                    {
+                        var itemName = ItemName(item.ItemId);
+
+                        var salesTrans = new KIOS.Integration.Application.Commands.CreateRetailTransactionSalesTransCommand
+                        {
+                            TransactionId = transactionid,
+                            ItemId = item.ItemId,
+                            ItemName = itemName,
+                            Linenum = (decimal)item.LineNum,
+                            Quantity = (decimal)item.Qty,
+                            TaxAmount = (decimal)item.TaxAmount,
+                            NetAmount = (decimal)item.NETAMOUNT,
+                            NetAmountInclTax = (decimal)item.NETAMOUNTINCLTAX,
+                            TransdDate = DateTime.Now,
+                            Store = request.Store,
+                            Price = (decimal)item.Price,
+                            LineComment = item.LineComment,
+                            DiscAmount = (decimal)item.DiscAmount,
+                            DiscAmountWithOutTax = (decimal)item.DiscAmountWithOutTax,
+                            PeriodicDiscAmount = (decimal)item.PERIODICDISCAMOUNT,
+                            PeriodicPercentaGeDisc = (decimal)item.PeriodicPercentaGeDisc
+                        };
+
+                        // Call the function to insert the sales line
+                        await InsertRetailTransactionSalesTransAsync(salesTrans, connection);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Handle any exceptions, for example, log them
+                Console.WriteLine($"Error: {ex.Message}");
+                throw;
+            }
+        }
+        private async Task InsertRetailTransactionSalesTransAsync(KIOS.Integration.Application.Commands.CreateRetailTransactionSalesTransCommand salesTrans, SqlConnection connection)
+        {
+            using (var command = new SqlCommand("InsertRetailTransactionSalesTrans", connection))
+            {
+                command.CommandType = CommandType.StoredProcedure;
+
+                // Add parameters
+                command.Parameters.AddWithValue("@TransactionId", salesTrans.TransactionId);
+                command.Parameters.AddWithValue("@ItemId", salesTrans.ItemId ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@ItemName", salesTrans.ItemName ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@LineNum", salesTrans.Linenum);
+                command.Parameters.AddWithValue("@Quantity", salesTrans.Quantity);
+                command.Parameters.AddWithValue("@TaxAmount", salesTrans.TaxAmount);
+                command.Parameters.AddWithValue("@NetAmount", salesTrans.NetAmount);
+                command.Parameters.AddWithValue("@NetAmountInclTax", salesTrans.NetAmountInclTax);
+                command.Parameters.AddWithValue("@TransdDate", salesTrans.TransdDate);
+                command.Parameters.AddWithValue("@Store", salesTrans.Store ?? (object)DBNull.Value);
+                command.Parameters.AddWithValue("@Price", salesTrans.Price);
+                command.Parameters.AddWithValue("@NetPrice", salesTrans.NetPrice);
+                command.Parameters.AddWithValue("@LineComment", salesTrans.LineComment);
+                command.Parameters.AddWithValue("@DiscAmount", salesTrans.DiscAmount);
+                command.Parameters.AddWithValue("@DiscAmountWithOutTax", salesTrans.DiscAmountWithOutTax);
+                command.Parameters.AddWithValue("@PeriodicDiscAmount", salesTrans.PeriodicDiscAmount);
+                command.Parameters.AddWithValue("@PeriodicPercentaGeDisc", salesTrans.PeriodicPercentaGeDisc);
+
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+        private async Task UpdateRetailTransaction(KIOS.Integration.Application.Commands.UpdateOrderRequest request, CustomCreateOrderResponse responseModel)
+        {
+            var jsonRequest = JsonConvert.SerializeObject(request);
+
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString_CHZ_MIDDLEWARE))
+                {
+                    await connection.OpenAsync();
+                    var thirdPartyOrderId = "";
+                    string Store = "";
+                    string TransactionId = "";
+                    decimal TotalTaxAmount = 0;
+                    decimal TotalNetAmount = 0;
+                    decimal TotalNetAmountInclTax = 0;
+                    decimal TotalPrice = 0;
+                    decimal TotalDiscAmount = 0;
+                    decimal TotalDiscAmountWithOutTax = 0;
+
+                    thirdPartyOrderId = request.ThirdPartyOrderId;
+
+                    string query = "SELECT * FROM dbo.retailtransaction " +
+               "WHERE thirdPartyOrderId = @ThirdPartyOrderId " +
+               "AND isFinalize != @IsFinalize ";
+
+                    var parameters = new Dictionary<string, object>
+                    {
+                        { "@ThirdPartyOrderId", thirdPartyOrderId },
+                        { "@IsFinalize", 1 }
+                    };
+
+                    DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, query, CommandType.Text, parameters);
+
+                    if (dataSet.Tables != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
+                    {
+                        DataTable dataTable = dataSet.Tables[0];
+                        if (dataTable.Rows.Count > 0)
+                        {
+                            //Hard Code
+                            Store = dataTable.Rows[0]["store"].ToString();
+                            TransactionId = dataTable.Rows[0]["transactionId"].ToString();
+                        }
+                    }
+                    // Insert sales lines
+                    foreach (var item in request.salesLines)
+                    {
+                        var itemName = ItemName(item.ItemId);
+
+                        TotalTaxAmount += (decimal)item.TaxAmount;
+                        TotalNetAmount += (decimal)item.NETAMOUNT;
+                        TotalNetAmountInclTax += (decimal)item.NETAMOUNTINCLTAX;
+                        TotalPrice += (decimal)item.Price;
+                        TotalDiscAmount += (decimal)item.DiscAmount;
+                        TotalDiscAmountWithOutTax += (decimal)item.DiscAmountWithOutTax;
+
+                        var salesTrans = new KIOS.Integration.Application.Commands.CreateRetailTransactionSalesTransCommand
+                        {
+                            TransactionId = TransactionId,
+                            ItemId = item.ItemId,
+                            ItemName = itemName,
+                            Linenum = (decimal)item.LineNum,
+                            Quantity = (decimal)item.Qty,
+                            TaxAmount = (decimal)item.TaxAmount,
+                            NetAmount = (decimal)item.NETAMOUNT,
+                            NetAmountInclTax = (decimal)item.NETAMOUNTINCLTAX,
+                            TransdDate = DateTime.Now,
+                            Store = Store,
+                            Price = (decimal)item.Price,
+                            LineComment = item.LineComment,
+                            DiscAmount = (decimal)item.DiscAmount,
+                            DiscAmountWithOutTax = (decimal)item.DiscAmountWithOutTax,
+                            PeriodicDiscAmount = (decimal)item.PERIODICDISCAMOUNT,
+                            PeriodicPercentaGeDisc = (decimal)item.PeriodicPercentaGeDisc
+                        };
+
+                        // Call the function to insert the sales line
+                        await InsertRetailTransactionSalesTransAsync(salesTrans, connection);
+
+                        // Construct the update query
+                        string updateQuery = "UPDATE dbo.retailtransaction " +
+                                             "SET NetAmount = NetAmount + @TotalNetAmount, " +
+                                             "    GrossAmount = GrossAmount + @TotalNetAmountInclTax " +
+                                             "WHERE thirdPartyOrderId = @ThirdPartyOrderId " +
+                                             "  AND isFinalize != 1 ";
+
+                        // Set parameters for the update query
+                        var updateParameters = new Dictionary<string, object>
+                        {
+                            { "@TotalNetAmount", TotalNetAmount },
+                            { "@TotalNetAmountInclTax", TotalNetAmountInclTax },
+                            { "@ThirdPartyOrderId", thirdPartyOrderId }
+                        };
+
+                        // Execute the update query
+                        SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, updateQuery, CommandType.Text, updateParameters);
+
                     }
                 }
             }
@@ -2191,5 +2467,106 @@ namespace KIOS.Integration.Application.Services
 
             return transactionId;
         }
+        private string ItemName(string itemId)
+        {
+            string itemName = string.Empty;
+            string dataAreaId = "CHZ";
+
+            string qry = "select ax.ECORESPRODUCTTRANSLATION.DESCRIPTION from ax.INVENTTABLE " +
+                        "Join ax.ECORESPRODUCTTRANSLATION On ax.ECORESPRODUCTTRANSLATION.PRODUCT = ax.INVENTTABLE.PRODUCT Where ITEMID ='" + itemId + "' And DATAAREAID = '" + dataAreaId + "' And LANGUAGEID='en-us'";
+
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_RSSU, qry, CommandType.Text);
+
+            if (dataSet.Tables != null && dataSet.Tables != null && dataSet.Tables.Count > 0)
+            {
+                DataTable dataTable = dataSet.Tables[0];
+                if (dataTable.Rows.Count > 0)
+                {
+                    //Hard Code
+                    itemName = dataTable.Rows[0]["Description"].ToString();
+                }
+            }
+
+            return itemName;
+        }
+        public bool CreatedRecord(string thirdPartyOrderId, string orderStatus)
+        {
+            bool isFinalize = orderStatus != "Created";
+
+            // Query to fetch the count
+            string getCreatedOrderQuery = "SELECT COUNT(*) AS RecordCount FROM dbo.RETAILTRANSACTION WHERE thirdPartyOrderId = @thirdPartyOrderId AND isFinalize = @isFinalize";
+
+            // Parameters for the query
+            var parameters = new Dictionary<string, object>
+                {
+                    { "@thirdPartyOrderId", thirdPartyOrderId },
+                    { "@isFinalize", isFinalize ? 1 : 0 }
+                };
+
+            // Use ExecuteDataSet to execute the query
+            DataSet dataSet = SqlHelper.ExecuteDataSet(_connectionString_CHZ_MIDDLEWARE, getCreatedOrderQuery, CommandType.Text, parameters);
+
+            // Check if the dataset contains results
+            if (dataSet != null && dataSet.Tables.Count > 0 && dataSet.Tables[0].Rows.Count > 0)
+            {
+                // Retrieve the count from the first row and column
+                int count = Convert.ToInt32(dataSet.Tables[0].Rows[0]["RecordCount"]);
+                return count > 0;
+            }
+
+            return false;
+        }
+
+        public bool DeleteTransaction(string thirdPartyOrderId)
+        {
+            // Query to update the isDelete flag
+            string updateQuery = @"
+            UPDATE dbo.RETAILTRANSACTION
+            SET isDelete = 1
+            WHERE thirdPartyOrderId = @thirdPartyOrderId
+            AND isFinalize != 1";
+
+            // Parameters for the query
+            var parameters = new Dictionary<string, object>
+            {
+            { "@thirdPartyOrderId", thirdPartyOrderId }
+            };
+
+            try
+            {
+                // Execute the update query
+                int rowsAffected = SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, updateQuery, CommandType.Text, parameters);
+
+                // Return true if at least one row was updated
+                return rowsAffected > 0;
+            }
+            catch (Exception ex)
+            {
+                // Log the exception (you can replace this with your logging framework)
+                Console.WriteLine("Error in DeleteTransaction: " + ex.Message);
+                return false;
+            }
+
+        }
+
+        private int MarkOrderPaid(string thirdPartyOrderId)
+        {
+            int affectedRows = 0;
+            string updateQuery = "UPDATE dbo.retailtransaction " +
+                                             "SET isPaid = 1 " +
+                                             "WHERE thirdPartyOrderId = @ThirdPartyOrderId ";
+
+            // Set parameters for the update query
+            var updateParameters = new Dictionary<string, object>
+                        {
+                            { "@ThirdPartyOrderId", thirdPartyOrderId }
+                        };
+
+            // Execute the update query
+            SqlHelper.ExecuteNonQuery(_connectionString_CHZ_MIDDLEWARE, updateQuery, CommandType.Text, updateParameters);
+
+            return affectedRows;
+        }
+
     }
 }

@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "KIOS.Integration.Web": {
+    "Cheezious_ServerApp.Integration.Web": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "swagger",
