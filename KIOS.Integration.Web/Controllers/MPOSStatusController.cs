@@ -19,26 +19,26 @@ namespace KIOS.Integration.Web.Controllers
         }
                
          //http://localhost:8082/api/MPOSStatus/check-pos-status?storeId=0072
-        [HttpGet]
-        [Route("check-pos-status")]
-        public async Task<ResponseModelWithClass<CheckPOSStatusReposne>> CheckPosStatusAsync(string storeId)
-        {
-            ResponseModelWithClass<CheckPOSStatusReposne> response = new ResponseModelWithClass<CheckPOSStatusReposne>();
+        //[HttpGet]
+        //[Route("check-pos-status")]
+        //public async Task<ResponseModelWithClass<CheckPOSStatusReposne>> CheckPosStatusAsync(string storeId)
+        //{
+        //    ResponseModelWithClass<CheckPOSStatusReposne> response = new ResponseModelWithClass<CheckPOSStatusReposne>();
 
-            try
-            {
-                return await _checkPosStatusService.CheckPosStatusAsync(storeId);
+        //    try
+        //    {
+        //        return await _checkPosStatusService.CheckPosStatusAsync(storeId);
 
-            }
-            catch (Exception ex)
-            {
-                response.Result = null;
-                response.Message = ex.Message;
-                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
-                response.MessageType = (int)MessageType.Error;
-                return response;
-            }
-        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        response.Result = null;
+        //        response.Message = ex.Message;
+        //        response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+        //        response.MessageType = (int)MessageType.Error;
+        //        return response;
+        //    }
+        //}
         
     }
 }

@@ -8,6 +8,7 @@ namespace KIOS.Integration.Application.Services.Abstraction
     {
         Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
         Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZA(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
-        Task<ResponseModelWithClass<CustomCreateOrderResponse>> UpdateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request);
+        Task<ResponseModelWithClass<CustomCreateOrderResponse>> UpdateOrderCHZ(KIOS.Integration.Application.Commands.UpdateOrderRequest request);
+        Task<ResponseModelWithClass<CustomCreateOrderResponse>> DeleteOrderCHZ(string thirdPartyOrderId);
     }
 }

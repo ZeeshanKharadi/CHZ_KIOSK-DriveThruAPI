@@ -8,6 +8,7 @@ namespace KIOS.Integration.Application.Commands
 
     public class CreateRetailTransactionCommand : IRequest<RetailTransaction>
     {
+
         public string Id { get; set; }
         public string Company { get; set; }
         public string Terminal { get; set; }
@@ -67,6 +68,7 @@ namespace KIOS.Integration.Application.Commands
         public string Table { get; set; }
         public string Server { get; set; }
         public string Person { get; set; }
+        public string orderStatus { get; set; }
 
         public IList<SalesLine> salesLines { get; set; }
 

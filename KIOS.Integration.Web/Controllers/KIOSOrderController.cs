@@ -21,49 +21,49 @@ namespace KIOS.Integration.Web.Controllers
             _createOrderService = createOrderService;
         }
 
-        [HttpPost]
-        [Route("create-order-pos")]
-        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
-        {
-            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
+        //[HttpPost]
+        //[Route("create-order-pos")]
+        //public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateOrderCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        //{
+        //    ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
 
-            try
-            {
-                return await _createOrderService.CreateOrderCHZ(request);
-            }
-            catch (Exception ex)
-            {
-                response.Result = null;
-                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
-                response.MessageType = (int)MessageType.Error;
-                response.Message = "server error msg: "+ ex.Message +" | Inner exception:  " + ex.InnerException;
-                return response;
-            }
-        }
+        //    try
+        //    {
+        //        return await _createOrderService.CreateOrderCHZ(request);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        response.Result = null;
+        //        response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+        //        response.MessageType = (int)MessageType.Error;
+        //        response.Message = "server error msg: "+ ex.Message +" | Inner exception:  " + ex.InnerException;
+        //        return response;
+        //    }
+        //}
 
-        [HttpPost]
-        [Route("create-driveThru-order")]
-        public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateDriveThruCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
-        {
-            ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
+        //[HttpPost]
+        //[Route("create-driveThru-order")]
+        //public async Task<ResponseModelWithClass<CustomCreateOrderResponse>> CreateDriveThruCHZ(KIOS.Integration.Application.Commands.CreateRetailTransactionCommand request)
+        //{
+        //    ResponseModelWithClass<CustomCreateOrderResponse> response = new ResponseModelWithClass<CustomCreateOrderResponse>();
 
-            try
-            {
-                request.Payment_method = PaymentMethod.Cash;
-                request.AmountCur = 0;
-                request.TenderTypeId = null;
-                request.TableNum = null;
+        //    try
+        //    {
+        //        request.Payment_method = PaymentMethod.Cash;
+        //        request.AmountCur = 0;
+        //        request.TenderTypeId = null;
+        //        request.TableNum = null;
 
-                return await _createOrderService.CreateOrderCHZ(request);
-            }
-            catch (Exception ex)
-            {
-                response.Result = null;
-                response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
-                response.MessageType = (int)MessageType.Error;
-                response.Message = "server error msg: " + ex.Message + " | Inner exception:  " + ex.InnerException;
-                return response;
-            }
-        }
+        //        return await _createOrderService.CreateOrderCHZ(request);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        response.Result = null;
+        //        response.HttpStatusCode = (int)HttpStatusCode.InternalServerError;
+        //        response.MessageType = (int)MessageType.Error;
+        //        response.Message = "server error msg: " + ex.Message + " | Inner exception:  " + ex.InnerException;
+        //        return response;
+        //    }
+        //}
     }
 }
