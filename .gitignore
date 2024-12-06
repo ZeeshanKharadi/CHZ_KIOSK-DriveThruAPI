@@ -39,3 +39,6 @@ ScaffoldingReadMe.txt
 /.vs/CHZ_DriveThruAPI/v17/.wsuo
 /.vs/CHZ_Integration/v17/DocumentLayout.backup.json
 /.vs/CHZ_Integration/config/applicationhost.config
+*.json
+/CHZ_Integration.zip
+/.vs/ServerApp_API/v17/.wsuo
