@@ -42,3 +42,6 @@ ScaffoldingReadMe.txt
 *.json
 /CHZ_Integration.zip
 /.vs/ServerApp_API/v17/.wsuo
+/KIOS.Integration.Web/Properties/PublishProfiles/FolderProfile.pubxml
+/KIOS.Integration.Web/Properties/PublishProfiles/FolderProfile1.pubxml
+/KIOS.Integration.Application/Properties/PublishProfiles/FolderProfile.pubxml
